@@ -34,7 +34,7 @@ Private Sub createMyMenu()
     Set mymenu = bar.Controls.Add(Type:=MsoControlType.msoControlPopup)
     mymenu.Caption = MYMENUNM
     Set menubtn = mymenu.Controls.Add(Type:=MsoControlType.msoControlButton)
-    menubtn.Caption = "å…¨ã¦æ›´æ–°"
+    menubtn.Caption = "‘S‚ÄXV"
     menubtn.OnAction = "main.updateAll"
 End Sub
 
