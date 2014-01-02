@@ -19,19 +19,15 @@ Public Sub updateAll()
 End Sub
 
 Public Function exportComponent() As Boolean
-    Dim i As Integer
-    Dim comnm As String
-    Dim comtype As Variant
+    Dim com As Object
     Dim expath As String
     Dim export As Boolean
     Dim confirmmsg As String
 
     With ThisWorkbook.VBProject
-        For i = 1 To .VBComponents.Count
-            comnm = .VBComponents.Item(i).Name
-            comtype = .VBComponents.Item(i).Type
-            If isExportComponent(comnm, comtype) Then
-                expath = getComponentPath(comnm)
+        For Each com In .VBComponents
+            If isExportComponent(com.Name, com.Type) Then
+                expath = getExportPath(com.Name)
                 If expath <> "" Then
 
                     export = True
@@ -41,7 +37,7 @@ Public Function exportComponent() As Boolean
                                    & "エクスポート先のファイルが他ユーザによって変更されています。" & vbCrLf _
                                    & "このままエクスポートしてもよろしいですか？" & vbCrLf _
                                    & vbCrLf _
-                                   & "コンポーネント名：" & comnm & vbCrLf _
+                                   & "コンポーネント名：" & com.Name & vbCrLf _
                                    & "エクスポート先：" & expath
                         If MsgBox(confirmmsg, vbYesNo) = vbYes Then export = True
                     End If
@@ -62,16 +58,12 @@ End Function
 
 'Subだと削除が完了する前に、次の処理が実行されてしまっているようなのでFunctionにした
 Private Function removeComponent() As Boolean
-    Dim i As Integer
-    Dim comnm As String
-    Dim comtype As Variant
+    Dim com As Object
 
     With ThisWorkbook.VBProject
-        For i = 1 To .VBComponents.Count
-            comnm = .VBComponents.Item(i).Name
-            comtype = .VBComponents.Item(i).Type
-            If isExportComponent(comnm, comtype) Then
-                .VBComponents.Remove .VBComponents.Item(i)
+        For Each com In .VBComponents
+            If isExportComponent(com.Name, com.Type) Then
+                .VBComponents.Remove com
             End If
         Next
     End With
@@ -80,21 +72,22 @@ Private Function removeComponent() As Boolean
 End Function
 
 Private Sub importComponent(ByVal dirpath As String)
-    Dim i As Integer
-    Dim filenm As String
-    Dim filepath As String
+    Dim f As Object
+    Dim d As Object
 
-    If Not fso.FolderExists(dirpath) Then
-        Exit Sub
-    End If
+    If Not fso.FolderExists(dirpath) Then Exit Sub
 
-    For i = 1 To fso.GetFolder(dirpath).Files.Count
-        filenm = fso.GetFolder(dirpath).Files.Item(i).Name
-        filepath = fso.GetFolder(dirpath).Files.Item(i).Path
-        If isImportableFile(filenm) Then
-            ThisWorkbook.VBProject.VBComponents.Import filepath
+    For Each f In fso.GetFolder(dirpath).Files
+        If isImportableFile(f.Name) Then
+            ThisWorkbook.VBProject.VBComponents.Import f.Path
             updateModified filepath
-            setupExportMetaInfo getComponentName(filenm), filepath
+            setExportPath getComponentName(f.Name), f.Path
+        End If
+    Next
+
+    For Each d In fso.GetFolder(dirpath).SubFolders
+        If isImportableFolder(d.Name) Then
+            importComponent d.Path
         End If
     Next
 End Sub
@@ -104,11 +97,23 @@ Private Function isExportComponent(ByVal comnm As String, ByVal comtype As Varia
 End Function
 
 Private Function isImportableFile(ByVal filenm As String) As Boolean
+    If InStr(filenm, ".bas") > 0 Or _
+       InStr(filenm, ".cls") > 0 Or _
+       InStr(filenm, ".frm") > 0 Then
+        isImportableFile = True
+    End If
+End Function
+
+Private Function isImportableFolder(ByVal dirnm As String) As Boolean
+    isImportableFolder = True
+    If dirnm = ".svn" Then
+        isImportableFolder = False
+    End If
 End Function
 
 Private Function getComponentName(ByVal filenm As String) As String
     Dim comnm As String
-    
+
     comnm = filenm
     comnm = Replace(comnm, ".bas", "")
     comnm = Replace(comnm, ".cls", "")
@@ -116,9 +121,6 @@ Private Function getComponentName(ByVal filenm As String) As String
     getComponentName = comnm
 End Function
 
-Private Sub setupExportMetaInfo(ByVal comnm As String, ByVal exportpath As String)
-    
-End Sub
 
 Private Function isModified(ByVal filepath As String) As Boolean
     Dim lastmodified As Variant
@@ -140,6 +142,73 @@ Private Sub updateModified(ByVal filepath As String)
     lastmodified_of.Add filepath, fso.GetFile(filepath).DateLastModified
 End Sub
 
-Private Function getComponentPath(ByVal comnm As String) As String
+
+Private Sub setExportPath(ByVal comnm As String, ByVal exportpath As String)
+    setMetaInfo comnm, "ExportPath", exportpath
+End Sub
+
+Private Function getExportPath(ByVal comnm As String) As String
+    getExportPath = getMetaInfo(comnm, "ExportPath")
+End Function
+
+
+''''''''''''
+' MetaInfo
+
+Private Sub setMetaInfo(ByVal comnm As String, ByVal metanm As String, ByVal metavalue As String)
+    Dim code As String
+    Dim row As Long
+    Dim currpath As String
+    
+    code = "'VBAPorter:" & metanm & "=" & metavalue
+    With ThisWorkbook.VBProject.VBComponents.Item(comnm)
+        currpath = getExportPath(comnm)
+        If currpath = "" Then
+            .CodeModule.InsertLines 1, code
+        ElseIf currpath <> exportpath Then
+            row = getMetaInfoRow(comnm, metanm)
+            If row > 0 Then .CodeModule.ReplaceLine row, code
+        End If
+    End With
+End Sub
+
+Private Function getMetaInfo(ByVal comnm As String, ByVal metanm As String) As String
+    Dim re As Object
+    Dim row As Long
+    Dim code As String
+
+    row = getMetaInfoRow(comnm, metanm)
+    If row <= 0 Then Exit Function
+    
+    Set re = newMetaInfoRegexp(metanm)
+    With ThisWorkbook.VBProject.VBComponents.Item(comnm)
+        code = .CodeModule.Lines(row, 1)
+        If re.Test(code) Then getMetaInfo = re.Execute(code).Item(0).submatches(0)
+    End With
+End Function
+
+Private Function getMetaInfoRow(ByVal comnm As String, ByVal metanm As String) As Long
+    Dim re As Object
+    Dim row As Long
+
+    Set re = newMetaInfoRegexp(metanm)
+    With ThisWorkbook.VBProject.VBComponents.Item(comnm)
+        For row = 1 To .CodeModule.CountOfDeclarationLines
+            If re.Test(.CodeModule.Lines(row, 1)) Then
+                getMetaInfoRow = row
+                Exit For
+            End If
+        Next
+    End With
+End Function
+
+Private Function newMetaInfoRegexp(ByVal metanm As String) As Object
+    Dim re As Object
+
+    Set re = CreateObject("VBScript.RegExp")
+    re.Pattern = "^'VBAPorter:" & metanm & "=(.+)$"
+    re.IgnoreCase = True
+    re.Global = True
+    Set newMetaInfoRegexp = re
 End Function
 
