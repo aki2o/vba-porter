@@ -1,9 +1,19 @@
 Attribute VB_Name = "main"
 Option Explicit
 
+Private Declare Function GetPrivateProfileString Lib "kernel32" Alias "GetPrivateProfileStringA" _
+        (ByVal lpApplicationName As String, _
+         ByVal lpKeyName As Any, _
+         ByVal lpDefault As String, _
+         ByVal lpReturnedString As String, _
+         ByVal nSize As Long, _
+         ByVal lpFileName As String) As Long
+
+Private Const ROOTMENUNM As String = "VBAPorter"
+
+Private fso As Object
 Private lastmodified_of As Object
 Private finished_preclose_of As Object
-Private fso As Object
 
 Public Sub initialize()
     Set fso = CreateObject("Scripting.FileSystemObject")
@@ -12,10 +22,138 @@ Public Sub initialize()
 End Sub
 
 Public Sub updateAll()
+    Dim rootmenu As CommandBarPopup
+    Dim configs() As String
+    Dim i As Integer
+    Dim dirpath As String
+
+    deleteMenu
+    Set rootmenu = createMenu
+    
     If removeComponent = False Then
-        MsgBox ""
+        MsgBox "ƒRƒ“ƒ|[ƒlƒ“ƒg‚ÌXV‚É¸”s‚µ‚Ü‚µ‚½"
         Exit Sub
     End If
+    
+    If Not existConfigFile Then
+        MsgBox getConfigFolderPath & " ‚Éİ’èƒtƒ@ƒCƒ‹‚ªŒ©‚Â‚©‚è‚Ü‚¹‚ñ"
+        Exit Sub
+    End If
+    configs = getConfigList()
+    For i = 0 To UBound(configs)
+        dirpath = getConfigValue(configs(i), "ROOT")
+        If Not fso.FolderExists(dirpath) Then
+            MsgBox "ˆÈ‰º‚ÌƒtƒHƒ‹ƒ_‚ªŒ©‚Â‚©‚ç‚È‚¢‚½‚ßA" & vbCrLf _
+                   & "ŠY“–ƒtƒHƒ‹ƒ_‚É‘Î‚·‚éƒRƒ“ƒ|[ƒlƒ“ƒg‚ÌƒCƒ“ƒ|[ƒg‹y‚Ñƒƒjƒ…[¶¬‚ÍÀs‚³‚ê‚Ü‚¹‚ñB" & vbCrLf _
+                   & vbCrLf _
+                   & "ƒtƒHƒ‹ƒ_F" & dirpath
+        Else
+            importComponent dirpath
+            createMenuFromFolder rootmenu, dirpath
+        End If
+    Next
+
+    MsgBox "Š®—¹‚µ‚Ü‚µ‚½"
+End Sub
+
+
+''''''''
+' Menu
+
+Public Function createMenu() As CommandBarPopup
+    Dim bar As CommandBar
+    Dim rootmenu As CommandBarPopup
+    Dim childmenu As CommandBarPopup
+    Dim menubtn As CommandBarButton
+
+    Set bar = Application.CommandBars("Worksheet Menu Bar")
+    Set rootmenu = bar.Controls.Add(Type:=MsoControlType.msoControlPopup)
+    rootmenu.Caption = ROOTMENUNM
+    
+    Set childmenu = rootmenu.Controls.Add(Type:=MsoControlType.msoControlPopup)
+    childmenu.Caption = "ŠÇ—"
+    Set menubtn = childmenu.Controls.Add(Type:=MsoControlType.msoControlButton)
+    menubtn.Caption = "•Û‘¶"
+    menubtn.OnAction = "main.exportComponent"
+    Set menubtn = childmenu.Controls.Add(Type:=MsoControlType.msoControlButton)
+    menubtn.Caption = "‘S‚ÄXV"
+    menubtn.OnAction = "main.updateAll"
+
+    Set createMenu = rootmenu
+End Function
+
+Public Sub deleteMenu()
+    Dim bar As CommandBar
+    Dim i As Integer
+
+    Set bar = Application.CommandBars("Worksheet Menu Bar")
+    For i = 1 To bar.Controls.Count
+        If bar.Controls.Item(i).Caption = ROOTMENUNM Then
+            bar.Controls.Item(i).Delete
+            Exit For
+        End If
+    Next
+End Sub
+
+Private Sub createMenuFromFolder(ByRef parent As CommandBarPopup, ByVal dirpath As String)
+    Dim d As Object
+    Dim f As Object
+    Dim menu As CommandBarPopup
+    Dim comnm As String
+    Dim btnnm As String
+    Dim btn As CommandBarButton
+
+    Set menu = parent.Controls.Add(Type:=MsoControlType.msoControlPopup)
+    menu.Caption = fso.GetFolder(dirpath).Name
+    
+    For Each d In fso.GetFolder(dirpath).SubFolders
+        If isImportableFolder(d.Name) Then
+            createMenuFromFolder menu, d.Path
+        End If
+    Next
+    
+    For Each f In fso.GetFolder(dirpath).Files
+        If isMenuableFile(f.Name) Then
+            comnm = getComponentName(f.Name)
+            btnnm = getMetaInfo(comnm, "MenuName")
+            If btnnm <> "" Then
+                Set btn = menu.Controls.Add(Type:=MsoControlType.msoControlButton)
+                btn.Caption = btnnm
+                btn.OnAction = comnm & ".Click"
+            End If
+        End If
+    Next
+End Sub
+
+Private Function isMenuableFile(ByVal filenm As String) As Boolean
+    If InStr(filenm, ".bas") > 0 Then
+        isMenuableFile = True
+    End If
+End Function
+
+
+'''''''''''''
+' Component
+
+Private Sub importComponent(ByVal dirpath As String)
+    Dim f As Object
+    Dim d As Object
+
+    If Not fso.FolderExists(dirpath) Then Exit Sub
+
+    For Each f In fso.GetFolder(dirpath).Files
+        If isImportableFile(f.Name) Then
+            ThisWorkbook.VBProject.VBComponents.Import f.Path
+            updateModified f.Path
+            setMetaInfo getComponentName(f.Name), "ExportPath", f.Path
+        End If
+    Next
+
+    For Each d In fso.GetFolder(dirpath).SubFolders
+        If isImportableFolder(d.Name) Then
+            importComponent d.Path
+        End If
+    Next
 End Sub
 
 Public Function exportComponent() As Boolean
@@ -27,23 +165,23 @@ Public Function exportComponent() As Boolean
     With ThisWorkbook.VBProject
         For Each com In .VBComponents
             If isExportComponent(com.Name, com.Type) Then
-                expath = getExportPath(com.Name)
+                expath = getMetaInfo(com.Name, "ExportPath")
                 If expath <> "" Then
 
                     export = True
                     If isModified(expath) Then
                         export = False
-                        confirmmsg = "ä»¥ä¸‹ã®ã‚³ãƒ³ãƒãƒ¼ãƒãƒ³ãƒˆã‚’ã‚¨ã‚¯ã‚¹ãƒãƒ¼ãƒˆã—ã‚ˆã†ã¨ã—ã¦ã„ã¾ã™ãŒã€" & vbCrLf _
-                                   & "ã‚¨ã‚¯ã‚¹ãƒãƒ¼ãƒˆå…ˆã®ãƒ•ã‚¡ã‚¤ãƒ«ãŒä»–ãƒ¦ãƒ¼ã‚¶ã«ã‚ˆã£ã¦å¤‰æ›´ã•ã‚Œã¦ã„ã¾ã™ã€‚" & vbCrLf _
-                                   & "ã“ã®ã¾ã¾ã‚¨ã‚¯ã‚¹ãƒãƒ¼ãƒˆã—ã¦ã‚‚ã‚ˆã‚ã—ã„ã§ã™ã‹ï¼Ÿ" & vbCrLf _
+                        confirmmsg = "ˆÈ‰º‚ÌƒRƒ“ƒ|[ƒlƒ“ƒg‚ğƒGƒNƒXƒ|[ƒg‚µ‚æ‚¤‚Æ‚µ‚Ä‚¢‚Ü‚·‚ªA" & vbCrLf _
+                                   & "ƒGƒNƒXƒ|[ƒgæ‚Ìƒtƒ@ƒCƒ‹‚ª‘¼ƒ†[ƒU‚É‚æ‚Á‚Ä•ÏX‚³‚ê‚Ä‚¢‚Ü‚·B" & vbCrLf _
+                                   & "‚±‚Ì‚Ü‚ÜƒGƒNƒXƒ|[ƒg‚µ‚Ä‚à‚æ‚ë‚µ‚¢‚Å‚·‚©H" & vbCrLf _
                                    & vbCrLf _
-                                   & "ã‚³ãƒ³ãƒãƒ¼ãƒãƒ³ãƒˆåï¼š" & com.Name & vbCrLf _
-                                   & "ã‚¨ã‚¯ã‚¹ãƒãƒ¼ãƒˆå…ˆï¼š" & expath
+                                   & "ƒRƒ“ƒ|[ƒlƒ“ƒg–¼F" & com.Name & vbCrLf _
+                                   & "ƒGƒNƒXƒ|[ƒgæF" & expath
                         If MsgBox(confirmmsg, vbYesNo) = vbYes Then export = True
                     End If
 
                     If export Then
-                        .VBComponents.Item(i).Export expath
+                        com.Export expath
                         updateModified expath
                     End If
                     
@@ -55,8 +193,7 @@ Public Function exportComponent() As Boolean
     exportComponent = True
 End Function
 
-
-'Subã ã¨å‰Šé™¤ãŒå®Œäº†ã™ã‚‹å‰ã«ã€æ¬¡ã®å‡¦ç†ãŒå®Ÿè¡Œã•ã‚Œã¦ã—ã¾ã£ã¦ã„ã‚‹ã‚ˆã†ãªã®ã§Functionã«ã—ãŸ
+'Sub‚¾‚Æíœ‚ªŠ®—¹‚·‚é‘O‚ÉAŸ‚Ìˆ—‚ªÀs‚³‚ê‚Ä‚µ‚Ü‚Á‚Ä‚¢‚é‚æ‚¤‚È‚Ì‚ÅFunction‚É‚µ‚½
 Private Function removeComponent() As Boolean
     Dim com As Object
 
@@ -69,31 +206,6 @@ Private Function removeComponent() As Boolean
     End With
 
     removeComponent = True
-End Function
-
-Private Sub importComponent(ByVal dirpath As String)
-    Dim f As Object
-    Dim d As Object
-
-    If Not fso.FolderExists(dirpath) Then Exit Sub
-
-    For Each f In fso.GetFolder(dirpath).Files
-        If isImportableFile(f.Name) Then
-            ThisWorkbook.VBProject.VBComponents.Import f.Path
-            updateModified filepath
-            setExportPath getComponentName(f.Name), f.Path
-        End If
-    Next
-
-    For Each d In fso.GetFolder(dirpath).SubFolders
-        If isImportableFolder(d.Name) Then
-            importComponent d.Path
-        End If
-    Next
-End Sub
-
-Private Function isExportComponent(ByVal comnm As String, ByVal comtype As Variant) As Boolean
-    If (comtype = 1 Or comtype = 2 Or comtype = 3) And comnm <> "main" Then isExportComponent = True
 End Function
 
 Private Function isImportableFile(ByVal filenm As String) As Boolean
@@ -111,6 +223,10 @@ Private Function isImportableFolder(ByVal dirnm As String) As Boolean
     End If
 End Function
 
+Private Function isExportComponent(ByVal comnm As String, ByVal comtype As Variant) As Boolean
+    If (comtype = 1 Or comtype = 2 Or comtype = 3) And comnm <> "main" Then isExportComponent = True
+End Function
+
 Private Function getComponentName(ByVal filenm As String) As String
     Dim comnm As String
 
@@ -121,6 +237,9 @@ Private Function getComponentName(ByVal filenm As String) As String
     getComponentName = comnm
 End Function
 
+
+'''''''''''''''''''
+' Manage Modified
 
 Private Function isModified(ByVal filepath As String) As Boolean
     Dim lastmodified As Variant
@@ -143,31 +262,20 @@ Private Sub updateModified(ByVal filepath As String)
 End Sub
 
 
-Private Sub setExportPath(ByVal comnm As String, ByVal exportpath As String)
-    setMetaInfo comnm, "ExportPath", exportpath
-End Sub
-
-Private Function getExportPath(ByVal comnm As String) As String
-    getExportPath = getMetaInfo(comnm, "ExportPath")
-End Function
-
-
 ''''''''''''
 ' MetaInfo
 
 Private Sub setMetaInfo(ByVal comnm As String, ByVal metanm As String, ByVal metavalue As String)
     Dim code As String
     Dim row As Long
-    Dim currpath As String
     
-    code = "'VBAPorter:" & metanm & "=" & metavalue
+    code = buildMetaInfoCode(metanm, metavalue)
     With ThisWorkbook.VBProject.VBComponents.Item(comnm)
-        currpath = getExportPath(comnm)
-        If currpath = "" Then
+        row = getMetaInfoRow(comnm, metanm)
+        If row > 0 Then
+            .CodeModule.ReplaceLine row, code
+        Else
             .CodeModule.InsertLines 1, code
-        ElseIf currpath <> exportpath Then
-            row = getMetaInfoRow(comnm, metanm)
-            If row > 0 Then .CodeModule.ReplaceLine row, code
         End If
     End With
 End Sub
@@ -202,6 +310,10 @@ Private Function getMetaInfoRow(ByVal comnm As String, ByVal metanm As String) A
     End With
 End Function
 
+Private Function buildMetaInfoCode(ByVal metanm As String, ByVal metavalue As String) As String
+    buildMetaInfoCode = "'VBAPorter:" & metanm & "=" & metavalue
+End Function
+
 Private Function newMetaInfoRegexp(ByVal metanm As String) As Object
     Dim re As Object
 
@@ -210,5 +322,55 @@ Private Function newMetaInfoRegexp(ByVal metanm As String) As Object
     re.IgnoreCase = True
     re.Global = True
     Set newMetaInfoRegexp = re
+End Function
+
+
+''''''''''
+' Config
+
+Private Function existConfigFile() As Boolean
+    existConfigFile = fso.FileExists(getConfigFilePath)
+End Function
+
+Private Function getConfigList() As String()
+    Dim buff As String * 32767
+    Dim retcd As Long
+
+    retcd = GetPrivateProfileString(vbNullString, vbNullString, vbNullString, buff, Len(buff), getConfigFilePath)
+    If retcd = 0 Then
+        Exit Function
+    End If
+    buff = Strings.Left(buff, InStr(buff, vbNullChar & vbNullChar) - 1)
+    getConfigList = Split(buff, vbNullChar)
+End Function
+
+Private Function getConfigValue(ByVal section As String, ByVal key As String) As String
+    Dim buff As String * 32767
+    Dim retcd As Long
+
+    retcd = GetPrivateProfileString(section, key, "", buff, Len(buff), getConfigFilePath)
+    If retcd = 0 Then
+        Exit Function
+    End If
+    getConfigValue = Strings.Left(buff, InStr(buff, vbNullChar) - 1)
+End Function
+
+Private Function getConfigFilePath() As String
+    Dim dirpath As String
+    
+    dirpath = getConfigFolderPath
+    If fso.FileExists(dirpath & "\_vbaporter") Then
+        getConfigFilePath = dirpath & "\_vbaporter"
+    Else
+        getConfigFilePath = dirpath & "\.vbaporter"
+    End If
+End Function
+
+Private Function getConfigFolderPath() As String
+    Dim homedir As String
+
+    homedir = Environ("HOME")
+    If Not fso.FolderExists(homedir) Then homedir = Environ("USERPROFILE")
+    getConfigFolderPath = homedir
 End Function
 
