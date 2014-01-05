@@ -1,0 +1,7 @@
+;;; vba-porterの設定ファイル
+
+;; 以下のようにINIファイル形式で記述します
+
+;; [メニュー名]
+;; ROOT=C:\Path\To\Root\Of\YourComponent
+
