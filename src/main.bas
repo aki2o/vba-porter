@@ -13,6 +13,28 @@ Private Const ROOTMENUNM As String = "VBAPorter"
 
 Private fso As Object
 
+Private Enum LANG
+    English = 1
+    Japanese = 2
+End Enum
+
+Private Enum MSG
+    FINISHED = 1
+    FAILED = 11
+    FAILED_MENU = 12
+    FAILED_IMPORT = 13
+    FAILED_REMOVE = 14
+    MENU_MANAGE = 21
+    MENU_SAVE = 22
+    MENU_UPDATE = 23
+    CONFIRM_EXPORT = 31
+    NONE_EXPORTPATH = 41
+    NONE_CONFIG = 42
+    NONE_ROOTPATH = 43
+    INFO_FOLDER = 51
+    INFO_FILE = 52
+End Enum
+
 Public Sub initialize(Optional ByVal quiet As Boolean = False)
     On Error GoTo CATCH_ERR
         
@@ -129,27 +151,6 @@ Public Sub save()
     
 CATCH_ERR:
     popupError Err.Number, Err.Source, Err.Description
-End Sub
-
-
-''''''''''''''''
-' Notification
-
-Private Sub popupFinish(Optional ByVal msg As String)
-    If msg = "" Then msg = "VBAPorterは実行を完了しました"
-    MsgBox msg
-End Sub
-
-Private Sub popupError(ByVal errno As Long, _
-                       ByVal errsrc As String, _
-                       ByVal errdesc As String, _
-                       Optional ByVal errmsg As String)
-    If errmsg = "" Then errmsg = "VBAPorterは実行に失敗しました。"
-    MsgBox errmsg & vbCrLf _
-           & vbCrLf _
-           & "ErrNumber: " & errno & vbCrLf _
-           & "ErrSource: " & errsrc & vbCrLf _
-           & errdesc
 End Sub
 
 
@@ -736,5 +737,167 @@ Private Function getConfigFolderPath() As String
 
 CATCH_ERR:
     Err.Raise Err.Number, "getConfigFolderPath > " & Err.Source, Err.Description
+End Function
+
+
+''''''''''''''''
+' Notification
+
+Private Sub popupFinish(Optional ByVal msg As String)
+    If msg = "" Then msg = "VBAPorterは実行を完了しました"
+    MsgBox msg
+End Sub
+
+Private Sub popupError(ByVal errno As Long, _
+                       ByVal errsrc As String, _
+                       ByVal errdesc As String, _
+                       Optional ByVal errmsg As String)
+    If errmsg = "" Then errmsg = "VBAPorterは実行に失敗しました。"
+    MsgBox errmsg & vbCrLf _
+           & vbCrLf _
+           & "ErrNumber: " & errno & vbCrLf _
+           & "ErrSource: " & errsrc & vbCrLf _
+           & errdesc
+End Sub
+
+Private Function formatString(ByVal s As String, ParamArray args() As Variant) As String
+    Dim i As Integer
+    Dim idx As Long
+
+    On Error GoTo CATCH_ERR
+    
+    For i = 0 To UBound(args)
+        idx = InStr(s, "%s")
+        If idx <= 0 Then Exit For
+        s = Left(s, idx) & args(i) & Mid(s, idx + 2)
+    Next
+    formatString = s
+    Exit Function
+
+CATCH_ERR:
+    Err.Raise Err.Number, "formatString > " & Err.Source, Err.Description
+End Function
+
+Private Function getLanguage() As LANG
+    On Error GoTo CATCH_ERR
+    
+    Select Case Application.International(xlCountryCode)
+        Case 81
+            getLanguage = LANG.Japanese
+        Case Else
+            getLanguage = LANG.English
+    End Select
+    Exit Function
+
+CATCH_ERR:
+    Err.Raise Err.Number, "getLanguage > " & Err.Source, Err.Description
+End Function
+
+Private Function getMsgManager() As Object
+    Static ret As Object
+    
+    On Error GoTo CATCH_ERR
+    
+    If ret Is Nothing Then
+        Set ret = CreateObject("Scripting.Dictionary")
+        
+        ret.Add getMsgKey(MSG.FINISHED, LANG.English), _
+                "VBAPorter finished execute."
+        ret.Add getMsgKey(MSG.FINISHED, LANG.Japanese), _
+                "VBAPorterは実行を完了しました。"
+        
+        ret.Add getMsgKey(MSG.FAILED, LANG.English), _
+                "VBAPorter failed to execute."
+        ret.Add getMsgKey(MSG.FAILED, LANG.Japanese), _
+                "VBAPorterは実行に失敗しました。"
+        
+        ret.Add getMsgKey(MSG.FAILED_MENU, LANG.English), _
+                "Failed to create menu."
+        ret.Add getMsgKey(MSG.FAILED_MENU, LANG.Japanese), _
+                "メニュー生成に失敗しました。"
+        
+        ret.Add getMsgKey(MSG.FAILED_IMPORT, LANG.English), _
+                "Failed to import component."
+        ret.Add getMsgKey(MSG.FAILED_IMPORT, LANG.Japanese), _
+                "コンポーネントのインポートに失敗しました。"
+        
+        ret.Add getMsgKey(MSG.FAILED_REMOVE, LANG.English), _
+                "Failed to remove component."
+        ret.Add getMsgKey(MSG.FAILED_REMOVE, LANG.Japanese), _
+                "既存コンポーネントの削除に失敗しました。"
+        
+        ret.Add getMsgKey(MSG.MENU_MANAGE, LANG.English), _
+                "Management"
+        ret.Add getMsgKey(MSG.MENU_MANAGE, LANG.Japanese), _
+                "管理"
+
+        ret.Add getMsgKey(MSG.MENU_SAVE, LANG.English), _
+                "Save"
+        ret.Add getMsgKey(MSG.MENU_SAVE, LANG.Japanese), _
+                "保存"
+
+        ret.Add getMsgKey(MSG.MENU_UPDATE, LANG.English), _
+                "Update"
+        ret.Add getMsgKey(MSG.MENU_UPDATE, LANG.Japanese), _
+                "更新"
+        
+        ret.Add getMsgKey(MSG.CONFIRM_EXPORT, LANG.English), _
+                "The file as a export path of the following component was updated by other user." & vbCrLf _
+                & "Do you export the component?" & vbCrLf _
+                & vbCrLf _
+                & "Component: %s" & vbCrLf _
+                & "ExportPath: %s"
+        ret.Add getMsgKey(MSG.CONFIRM_EXPORT, LANG.Japanese), _
+                "以下のコンポーネントはエクスポート先のファイルが他ユーザによって変更されています。" & vbCrLf _
+                & "このままエクスポートしてもよろしいですか？" & vbCrLf _
+                & vbCrLf _
+                & "コンポーネント名： %s" & vbCrLf _
+                & "エクスポート先： %s"
+        
+        ret.Add getMsgKey(MSG.NONE_EXPORTPATH, LANG.English), _
+                "The following component will be not exported because the export path is not set." & vbCrLf _
+                & vbCrLf _
+                & "Component: %s"
+        ret.Add getMsgKey(MSG.NONE_EXPORTPATH, LANG.Japanese), _
+                "以下のコンポーネントはエクスポート先が設定されていないためエクスポートされません。" & vbCrLf _
+                & vbCrLf _
+                & "コンポーネント名： %s"
+        
+        ret.Add getMsgKey(MSG.NONE_CONFIG, LANG.English), _
+                "The config file is not found in ""%s""."
+        ret.Add getMsgKey(MSG.NONE_CONFIG, LANG.Japanese), _
+                """%s""に設定ファイルが見つかりません。"
+        
+        ret.Add getMsgKey(MSG.NONE_ROOTPATH, LANG.English), _
+                "以下のフォルダが見つからないため、" & vbCrLf _
+                & "%sのコンポーネントのインポート及びメニュー生成は実行されません。" & vbCrLf _
+                & vbCrLf _
+                & "フォルダ： %s"
+        ret.Add getMsgKey(MSG.NONE_ROOTPATH, LANG.Japanese), _
+                "以下のフォルダが見つからないため、" & vbCrLf _
+                & "%sのコンポーネントのインポート及びメニュー生成は実行されません。" & vbCrLf _
+                & vbCrLf _
+                & "フォルダ： %s"
+        
+        ret.Add getMsgKey(MSG.INFO_FOLDER, LANG.English), _
+                "Folder: %s" & vbCrLf
+        ret.Add getMsgKey(MSG.INFO_FOLDER, LANG.Japanese), _
+                "フォルダ： %s" & vbCrLf
+        
+        ret.Add getMsgKey(MSG.INFO_FILE, LANG.English), _
+                "File: %s" & vbCrLf
+        ret.Add getMsgKey(MSG.INFO_FILE, LANG.Japanese), _
+                "ファイル： %s" & vbCrLf
+        
+    End If
+    Set getMsgManager = ret
+    Exit Function
+
+CATCH_ERR:
+    Err.Raise Err.Number, "getMsgManager > " & Err.Source, Err.Description
+End Function
+
+Private Function getMsgKey(ByVal msgtype As MSG, ByVal lang As LANG) As String
+    getMsgKey = msgtype & ":" & lang
 End Function
 
