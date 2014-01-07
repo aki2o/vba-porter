@@ -12,40 +12,62 @@ Private Declare Function GetPrivateProfileString Lib "kernel32" Alias "GetPrivat
 Private Const ROOTMENUNM As String = "VBAPorter"
 
 Private fso As Object
-Private lastmodified_of As Object
-Private finished_preclose_of As Object
 
-Public Sub initialize()
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    Set lastmodified_of = CreateObject("Scripting.Dictionary")
-    Set finished_preclose_of = CreateObject("Scripting.Dictionary")
+Public Sub initialize(Optional ByVal quiet As Boolean = False)
+    On Error GoTo CATCH_ERR
+        
+    deleteMenu
+    createMenu
+    If Not quiet Then popupFinish
+    Exit Sub
+    
+CATCH_ERR:
+    popupError Err.Number, Err.Source, Err.Description
 End Sub
 
-Public Sub updateAll()
+Public Sub finalize(Optional ByVal quiet As Boolean = False)
+    On Error GoTo CATCH_ERR
+        
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    deleteMenu
+    removeModified
+    If Not quiet Then popupFinish
+    Exit Sub
+    
+CATCH_ERR:
+    popupError Err.Number, Err.Source, Err.Description
+End Sub
+
+Public Sub update()
     Dim rootmenu As CommandBarPopup
     Dim configs() As String
     Dim i As Integer
     Dim dirpath As String
+    Dim rootdirs() As String
+    Dim menunms() As String
 
     On Error GoTo CATCH_ERR
-        
+
+    ' 初期化
+    Set fso = CreateObject("Scripting.FileSystemObject")
     deleteMenu
     Set rootmenu = createMenu
-    
     If removeComponent = False Then
         MsgBox "既存コンポーネントの削除に失敗しました"
         Exit Sub
     End If
-    
+
+    ' 設定取得
     If Not existConfigFile Then
         MsgBox getConfigFolderPath & " に設定ファイルが見つかりません"
         Exit Sub
     End If
     configs = getConfigList()
+
+    ' 設定内容チェック
+    ReDim rootdirs(0)
+    ReDim menunms(0)
     For i = 0 To UBound(configs)
-    
-        On Error GoTo FAILED_SETUP
-        
         dirpath = getConfigValue(configs(i), "ROOT")
         If Not fso.FolderExists(dirpath) Then
             MsgBox "以下のフォルダが見つからないため、" & vbCrLf _
@@ -53,53 +75,88 @@ Public Sub updateAll()
                    & vbCrLf _
                    & "フォルダ：" & dirpath
         Else
-            importComponent dirpath
-            createMenuFromFolder rootmenu, dirpath
+            ReDim Preserve rootdirs(UBound(rootdirs) + 1)
+            rootdirs(UBound(rootdirs)) = dirpath
+            ReDim Preserve menunms(UBound(menunms) + 1)
+            menunms(UBound(menunms)) = getConfigValue(configs(i), "MENUNAME")
         End If
-        GoTo NEXT_LOOP
-
-FAILED_SETUP:
-        MsgBox configs(i) & "のコンポーネントのインポート及びメニュー生成に失敗しました。" & vbCrLf _
-               & vbCrLf _
-               & "ErrNumber: " & Err.Number & vbCrLf _
-               & "ErrSource: " & Err.Source & vbCrLf _
-               & Err.Description
-NEXT_LOOP:
-
     Next
 
-    MsgBox "完了しました"
-    Exit Sub
+    ' インポート
+    For i = 1 To UBound(rootdirs)
+        On Error GoTo FAILED_IMPORT
+        importComponent rootdirs(i)
+        GoTo NEXT_IMPORT
+FAILED_IMPORT:
+        popupError Err.Number, Err.Source, Err.Description, "コンポーネントのインポートに失敗しました。"
+NEXT_IMPORT:
+    Next
 
-CATCH_ERR:
-    MsgBox "実行に失敗しました。" & vbCrLf _
-           & vbCrLf _
-           & "ErrNumber: " & Err.Number & vbCrLf _
-           & "ErrSource: " & Err.Source & vbCrLf _
-           & Err.Description
-End Sub
-
-Public Sub save()
+    ' メニュー生成
+    For i = 1 To UBound(menunms)
+        On Error GoTo FAILED_MENU
+        If menunms(i) <> "" Then createMenuFromFolder rootmenu, rootdirs(i), menunms(i)
+        GoTo NEXT_MENU
+FAILED_MENU:
+        popupError Err.Number, Err.Source, Err.Description, "メニュー生成に失敗しました。"
+NEXT_MENU:
+    Next
 
     On Error GoTo CATCH_ERR
     
+    ' ファイル最終更新日時の保存
+    For i = 1 To UBound(rootdirs)
+        updateModifiedRecursive rootdirs(i)
+    Next
+    saveModified
+
+    popupFinish
+    Exit Sub
+
+CATCH_ERR:
+    popupError Err.Number, Err.Source, Err.Description
+End Sub
+
+Public Sub save()
+    On Error GoTo CATCH_ERR
+    
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    loadModified
     exportComponent
-    MsgBox "完了しました"
+    saveModified
+    popupFinish
     Exit Sub
     
 CATCH_ERR:
-    MsgBox "実行に失敗しました。" & vbCrLf _
+    popupError Err.Number, Err.Source, Err.Description
+End Sub
+
+
+''''''''''''''''
+' Notification
+
+Private Sub popupFinish(Optional ByVal msg As String)
+    If msg = "" Then msg = "VBAPorterは実行を完了しました"
+    MsgBox msg
+End Sub
+
+Private Sub popupError(ByVal errno As Long, _
+                       ByVal errsrc As String, _
+                       ByVal errdesc As String, _
+                       Optional ByVal errmsg As String)
+    If errmsg = "" Then errmsg = "VBAPorterは実行に失敗しました。"
+    MsgBox errmsg & vbCrLf _
            & vbCrLf _
-           & "ErrNumber: " & Err.Number & vbCrLf _
-           & "ErrSource: " & Err.Source & vbCrLf _
-           & Err.Description
+           & "ErrNumber: " & errno & vbCrLf _
+           & "ErrSource: " & errsrc & vbCrLf _
+           & errdesc
 End Sub
 
 
 ''''''''
 ' Menu
 
-Public Function createMenu() As CommandBarPopup
+Private Function createMenu() As CommandBarPopup
     Dim bar As CommandBar
     Dim rootmenu As CommandBarPopup
     Dim childmenu As CommandBarPopup
@@ -117,8 +174,8 @@ Public Function createMenu() As CommandBarPopup
     menubtn.Caption = "保存"
     menubtn.OnAction = "main.save"
     Set menubtn = childmenu.Controls.Add(Type:=MsoControlType.msoControlButton)
-    menubtn.Caption = "全て更新"
-    menubtn.OnAction = "main.updateAll"
+    menubtn.Caption = "更新"
+    menubtn.OnAction = "main.update"
 
     Set createMenu = rootmenu
     Exit Function
@@ -127,7 +184,7 @@ CATCH_ERR:
     Err.Raise Err.Number, "createMenu > " & Err.Source, Err.Description
 End Function
 
-Public Sub deleteMenu()
+Private Sub deleteMenu()
     Dim bar As CommandBar
     Dim i As Integer
 
@@ -146,18 +203,22 @@ CATCH_ERR:
     Err.Raise Err.Number, "deleteMenu > " & Err.Source, Err.Description
 End Sub
 
-Private Sub createMenuFromFolder(ByRef parent As CommandBarPopup, ByVal dirpath As String)
+Private Sub createMenuFromFolder(ByRef parent As CommandBarPopup, _
+                                 ByVal dirpath As String, _
+                                 Optional ByVal menunm As String)
     Dim d As Object
     Dim f As Object
     Dim menu As CommandBarPopup
-    Dim comnm As String
+    Dim com As Object
     Dim btnnm As String
     Dim btn As CommandBarButton
+    Dim errmsg As String
 
     On Error GoTo CATCH_ERR
     
     Set menu = parent.Controls.Add(Type:=MsoControlType.msoControlPopup)
-    menu.Caption = fso.GetFolder(dirpath).Name
+    If menunm = "" Then menunm = fso.GetFolder(dirpath).Name
+    menu.Caption = menunm
     
     For Each d In fso.GetFolder(dirpath).SubFolders
         If isImportableFolder(d.Name) Then
@@ -169,12 +230,14 @@ Private Sub createMenuFromFolder(ByRef parent As CommandBarPopup, ByVal dirpath 
     
     For Each f In fso.GetFolder(dirpath).Files
         If isMenuableFile(f.Name) Then
-            comnm = getComponentName(f.Name)
-            btnnm = getMetaInfo(comnm, "MenuName")
-            If btnnm <> "" Then
-                Set btn = menu.Controls.Add(Type:=MsoControlType.msoControlButton)
-                btn.Caption = btnnm
-                btn.OnAction = comnm & ".Click"
+            Set com = ThisWorkbook.VBProject.VBComponents.Item(getComponentName(f.Name))
+            If Not com Is Nothing Then
+                btnnm = getMetaInfo(com.Name, "MenuName")
+                If btnnm <> "" Then
+                    Set btn = menu.Controls.Add(Type:=MsoControlType.msoControlButton)
+                    btn.Caption = btnnm
+                    btn.OnAction = com.Name & ".Click"
+                End If
             End If
         End If
     Next
@@ -183,7 +246,9 @@ Private Sub createMenuFromFolder(ByRef parent As CommandBarPopup, ByVal dirpath 
 FAILED_RECURSIVE:
     Err.Raise Err.Number, Err.Source, Err.Description
 CATCH_ERR:
-    Err.Raise Err.Number, "createMenuFromFolder > " & Err.Source, Err.Description
+    If Not d Is Nothing Then errmsg = "フォルダ：" & d.Path & vbCrLf
+    If Not f Is Nothing Then errmsg = "ファイル：" & f.Path & vbCrLf
+    Err.Raise Err.Number, "createMenuFromFolder > " & Err.Source, errmsg & Err.Description
 End Sub
 
 Private Function isMenuableFile(ByVal filenm As String) As Boolean
@@ -204,15 +269,16 @@ End Function
 
 Private Sub importComponent(ByVal dirpath As String)
     Dim f As Object
+    Dim com As Object
     Dim d As Object
+    Dim errmsg As String
 
     On Error GoTo CATCH_ERR
     
     For Each f In fso.GetFolder(dirpath).Files
         If isImportableFile(f.Name) Then
-            ThisWorkbook.VBProject.VBComponents.Import f.Path
-            updateModified f.Path
-            setMetaInfo getComponentName(f.Name), "ExportPath", f.Path
+            Set com = ThisWorkbook.VBProject.VBComponents.Import(f.Path)
+            setMetaInfo com.Name, "ExportPath", f.Path
         End If
     Next
     For Each d In fso.GetFolder(dirpath).SubFolders
@@ -227,7 +293,9 @@ Private Sub importComponent(ByVal dirpath As String)
 FAILED_RECURSIVE:
     Err.Raise Err.Number, Err.Source, Err.Description
 CATCH_ERR:
-    Err.Raise Err.Number, "importComponent > " & Err.Source, Err.Description
+    If Not d Is Nothing Then errmsg = "フォルダ：" & d.Path & vbCrLf
+    If Not f Is Nothing Then errmsg = "ファイル：" & f.Path & vbCrLf
+    Err.Raise Err.Number, "importComponent > " & Err.Source, errmsg & Err.Description
 End Sub
 
 Private Sub exportComponent()
@@ -242,8 +310,12 @@ Private Sub exportComponent()
         For Each com In .VBComponents
             If isExportComponent(com.Name, com.Type) Then
                 expath = getMetaInfo(com.Name, "ExportPath")
-                If expath <> "" Then
-
+                If expath = "" Then
+                    MsgBox "以下のコンポーネントはエクスポート先が設定されていないため、" & vbCrLf _
+                           & "エクスポートされません。" & vbCrLf _
+                           & vbCrLf _
+                           & "コンポーネント名：" & com.Name
+                Else
                     export = True
                     If isModified(expath) Then
                         export = False
@@ -255,12 +327,10 @@ Private Sub exportComponent()
                                    & "エクスポート先：" & expath
                         If MsgBox(confirmmsg, vbYesNo) = vbYes Then export = True
                     End If
-
                     If export Then
                         com.export expath
                         updateModified expath
                     End If
-                    
                 End If
             End If
         Next
@@ -349,21 +419,108 @@ End Function
 '''''''''''''''''''
 ' Manage Modified
 
-Private Function isModified(ByVal filepath As String) As Boolean
-    Dim lastmodified As Variant
+Private Sub loadModified()
+    Dim filepath As String
+    Dim mgr As Object
+    Dim elem() As String
 
     On Error GoTo CATCH_ERR
     
-    lastmodified = lastmodified_of.Item(filepath)
-    If Not lastmodified Then
-        isModified = False
-    ElseIf Not fso.FileExists(filepath) Then
-        isModified = True
-    ElseIf fso.GetFile(filepath).DateLastModified = lastmodified Then
-        isModified = False
-    Else
-        isModified = True
-    End If
+    filepath = getModifiedStorePath
+    If Not fso.FileExists(filepath) Then Exit Sub
+    Set mgr = getModifiedManager
+    With fso.OpenTextFile(filepath, 1, False, -2)
+        Do While Not .AtEndOfStream
+            elem = Split(.ReadLine, vbTab)
+            If UBound(elem) = 1 Then
+                If mgr.Exists(elem(0)) Then mgr.Remove elem(0)
+                mgr.Add elem(0), elem(1)
+            End If
+        Loop
+        .Close
+    End With
+    Exit Sub
+
+CATCH_ERR:
+    Err.Raise Err.Number, "loadModified > " & Err.Source, Err.Description
+End Sub
+
+Private Sub saveModified()
+    Dim filepath As String
+    Dim mgr As Object
+    Dim key As Variant
+    
+    On Error GoTo CATCH_ERR
+    
+    filepath = getModifiedStorePath
+    Set mgr = getModifiedManager
+    With fso.OpenTextFile(filepath, 2, True, -2)
+        For Each key In mgr.Keys
+            .WriteLine key & vbTab & mgr.Item(key)
+        Next
+        .Close
+    End With
+    Exit Sub
+
+CATCH_ERR:
+    Err.Raise Err.Number, "saveModified > " & Err.Source, Err.Description
+End Sub
+
+Private Sub removeModified()
+    Dim filepath As String
+    
+    On Error GoTo CATCH_ERR
+    
+    filepath = getModifiedStorePath
+    If Not fso.FileExists(filepath) Then Exit Sub
+    fso.DeleteFile filepath
+    Exit Sub
+
+CATCH_ERR:
+    Err.Raise Err.Number, "removeModified > " & Err.Source, Err.Description
+End Sub
+
+Private Sub updateModifiedRecursive(ByVal dirpath As String)
+    Dim f As Object
+    Dim d As Object
+    Dim errmsg As String
+
+    On Error GoTo CATCH_ERR
+    
+    For Each f In fso.GetFolder(dirpath).Files
+        If isImportableFile(f.Name) Then updateModified f.Path
+    Next
+    For Each d In fso.GetFolder(dirpath).SubFolders
+        If isImportableFolder(d.Name) Then
+            On Error GoTo FAILED_RECURSIVE
+            updateModifiedRecursive d.Path
+            On Error GoTo CATCH_ERR
+        End If
+    Next
+    Exit Sub
+
+FAILED_RECURSIVE:
+    Err.Raise Err.Number, Err.Source, Err.Description
+CATCH_ERR:
+    If Not d Is Nothing Then errmsg = "フォルダ：" & d.Path & vbCrLf
+    If Not f Is Nothing Then errmsg = "ファイル：" & f.Path & vbCrLf
+    Err.Raise Err.Number, "updateModifiedRecursive > " & Err.Source, errmsg & Err.Description
+End Sub
+
+Private Function isModified(ByVal filepath As String) As Boolean
+    Dim mgr As Object
+    Dim currvalue As String
+    Dim storevalue As String
+
+    On Error GoTo CATCH_ERR
+    
+    If Not fso.FileExists(filepath) Then Exit Function
+    Set mgr = getModifiedManager
+    If Not mgr.Exists(filepath) Then Exit Function
+    currvalue = fso.GetFile(filepath).DateLastModified
+    storevalue = mgr.Item(filepath)
+    If currvalue = storevalue Then Exit Function
+    isModified = True
     Exit Function
 
 CATCH_ERR:
@@ -371,15 +528,41 @@ CATCH_ERR:
 End Function
 
 Private Sub updateModified(ByVal filepath As String)
+    Dim mgr As Object
+    
     On Error GoTo CATCH_ERR
     
-    If lastmodified_of.Exists(filepath) Then lastmodified_of.Remove filepath
-    lastmodified_of.Add filepath, fso.GetFile(filepath).DateLastModified
-    Exit Function
+    Set mgr = getModifiedManager
+    If mgr.Exists(filepath) Then mgr.Remove filepath
+    mgr.Add filepath, fso.GetFile(filepath).DateLastModified
+    Exit Sub
 
 CATCH_ERR:
     Err.Raise Err.Number, "updateModified > " & Err.Source, Err.Description
 End Sub
+
+Private Function getModifiedManager() As Object
+    Static ret As Object
+    
+    On Error GoTo CATCH_ERR
+    
+    If ret Is Nothing Then Set ret = CreateObject("Scripting.Dictionary")
+    Set getModifiedManager = ret
+    Exit Function
+
+CATCH_ERR:
+    Err.Raise Err.Number, "getModifiedManager > " & Err.Source, Err.Description
+End Function
+
+Private Function getModifiedStorePath() As String
+    On Error GoTo CATCH_ERR
+    
+    getModifiedStorePath = fso.GetSpecialFolder(2) & "\vbaporter.modified"
+    Exit Function
+
+CATCH_ERR:
+    Err.Raise Err.Number, "getModifiedStorePath > " & Err.Source, Err.Description
+End Function
 
 
 ''''''''''''

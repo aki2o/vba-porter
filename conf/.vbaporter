@@ -1,7 +1,21 @@
-;;; vba-porterの設定ファイル
+;;; vba-porter config file
 
-;; 以下のようにINIファイル形式で記述します
+;;; Commentary:
+;; 
+;; Write the following information using INI format of Windows.
+;; - Section  ... Any string which is required to be unique.
+;; - ROOT     ... A absolute path of the root directory which has your component.
+;; - MENUNAME ... A root menu name of the built menu from the information of your component.
+;; 
+;; For more information, see <https://github.com/aki2o/vba-porter/blob/master/README.md>
 
-;; [メニュー名]
-;; ROOT=C:\Path\To\Root\Of\YourComponent
+;;; Example:
+;; 
+;; [MyLib]
+;; ROOT=C:\MyLib\VBA
+;; 
+;; [MyProj]
+;; ROOT=D:\Work\SampleProj\src
+;; MENUNAME=SampleProject
+;; 
 
