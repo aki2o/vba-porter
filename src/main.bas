@@ -13,12 +13,12 @@ Private Const ROOTMENUNM As String = "VBAPorter"
 
 Private fso As Object
 
-Private Enum LANG
+Private Enum lang
     English = 1
     Japanese = 2
 End Enum
 
-Private Enum MSG
+Private Enum msg
     FINISHED = 1
     FAILED = 11
     FAILED_MENU = 12
@@ -70,32 +70,29 @@ Public Sub update()
 
     On Error GoTo CATCH_ERR
 
-    ' 初期化
+    ' Init
     Set fso = CreateObject("Scripting.FileSystemObject")
     deleteMenu
     Set rootmenu = createMenu
     If removeComponent = False Then
-        MsgBox "既存コンポーネントの削除に失敗しました"
+        popupMsg getMsg(FAILED_REMOVE)
         Exit Sub
     End If
 
-    ' 設定取得
+    ' Get config
     If Not existConfigFile Then
-        MsgBox getConfigFolderPath & " に設定ファイルが見つかりません"
+        popupMsg formatString(getMsg(NONE_CONFIG), getConfigFolderPath)
         Exit Sub
     End If
     configs = getConfigList()
 
-    ' 設定内容チェック
+    ' Check config
     ReDim rootdirs(0)
     ReDim menunms(0)
     For i = 0 To UBound(configs)
         dirpath = getConfigValue(configs(i), "ROOT")
         If Not fso.FolderExists(dirpath) Then
-            MsgBox "以下のフォルダが見つからないため、" & vbCrLf _
-                   & configs(i) & "のコンポーネントのインポート及びメニュー生成は実行されません。" & vbCrLf _
-                   & vbCrLf _
-                   & "フォルダ：" & dirpath
+            popupMsg formatString(getMsg(NONE_ROOTPATH), configs(i), dirpath)
         Else
             ReDim Preserve rootdirs(UBound(rootdirs) + 1)
             rootdirs(UBound(rootdirs)) = dirpath
@@ -104,29 +101,29 @@ Public Sub update()
         End If
     Next
 
-    ' インポート
+    ' Import
     For i = 1 To UBound(rootdirs)
         On Error GoTo FAILED_IMPORT
         importComponent rootdirs(i)
         GoTo NEXT_IMPORT
 FAILED_IMPORT:
-        popupError Err.Number, Err.Source, Err.Description, "コンポーネントのインポートに失敗しました。"
+        popupError Err.Number, Err.Source, Err.Description, getMsg(FAILED_IMPORT)
 NEXT_IMPORT:
     Next
 
-    ' メニュー生成
+    ' Create menu
     For i = 1 To UBound(menunms)
         On Error GoTo FAILED_MENU
         If menunms(i) <> "" Then createMenuFromFolder rootmenu, rootdirs(i), menunms(i)
         GoTo NEXT_MENU
 FAILED_MENU:
-        popupError Err.Number, Err.Source, Err.Description, "メニュー生成に失敗しました。"
+        popupError Err.Number, Err.Source, Err.Description, getMsg(FAILED_MENU)
 NEXT_MENU:
     Next
 
     On Error GoTo CATCH_ERR
     
-    ' ファイル最終更新日時の保存
+    ' Save information of modified
     For i = 1 To UBound(rootdirs)
         updateModifiedRecursive rootdirs(i)
     Next
@@ -170,12 +167,12 @@ Private Function createMenu() As CommandBarPopup
     rootmenu.Caption = ROOTMENUNM
     
     Set childmenu = rootmenu.Controls.Add(Type:=MsoControlType.msoControlPopup)
-    childmenu.Caption = "管理"
+    childmenu.Caption = getMsg(MENU_MANAGE)
     Set menubtn = childmenu.Controls.Add(Type:=MsoControlType.msoControlButton)
-    menubtn.Caption = "保存"
+    menubtn.Caption = getMsg(MENU_SAVE)
     menubtn.OnAction = "main.save"
     Set menubtn = childmenu.Controls.Add(Type:=MsoControlType.msoControlButton)
-    menubtn.Caption = "更新"
+    menubtn.Caption = getMsg(MENU_UPDATE)
     menubtn.OnAction = "main.update"
 
     Set createMenu = rootmenu
@@ -247,8 +244,8 @@ Private Sub createMenuFromFolder(ByRef parent As CommandBarPopup, _
 FAILED_RECURSIVE:
     Err.Raise Err.Number, Err.Source, Err.Description
 CATCH_ERR:
-    If Not d Is Nothing Then errmsg = "フォルダ：" & d.Path & vbCrLf
-    If Not f Is Nothing Then errmsg = "ファイル：" & f.Path & vbCrLf
+    If Not d Is Nothing Then errmsg = formatString(getMsg(INFO_FOLDER), d.Path)
+    If Not f Is Nothing Then errmsg = formatString(getMsg(INFO_FILE), f.Path)
     Err.Raise Err.Number, "createMenuFromFolder > " & Err.Source, errmsg & Err.Description
 End Sub
 
@@ -294,8 +291,8 @@ Private Sub importComponent(ByVal dirpath As String)
 FAILED_RECURSIVE:
     Err.Raise Err.Number, Err.Source, Err.Description
 CATCH_ERR:
-    If Not d Is Nothing Then errmsg = "フォルダ：" & d.Path & vbCrLf
-    If Not f Is Nothing Then errmsg = "ファイル：" & f.Path & vbCrLf
+    If Not d Is Nothing Then errmsg = formatString(getMsg(INFO_FOLDER), d.Path)
+    If Not f Is Nothing Then errmsg = formatString(getMsg(INFO_FILE), f.Path)
     Err.Raise Err.Number, "importComponent > " & Err.Source, errmsg & Err.Description
 End Sub
 
@@ -312,21 +309,13 @@ Private Sub exportComponent()
             If isExportComponent(com.Name, com.Type) Then
                 expath = getMetaInfo(com.Name, "ExportPath")
                 If expath = "" Then
-                    MsgBox "以下のコンポーネントはエクスポート先が設定されていないため、" & vbCrLf _
-                           & "エクスポートされません。" & vbCrLf _
-                           & vbCrLf _
-                           & "コンポーネント名：" & com.Name
+                    popupMsg formatString(getMsg(NONE_EXPORTPATH), com.Name)
                 Else
                     export = True
                     If isModified(expath) Then
                         export = False
-                        confirmmsg = "以下のコンポーネントをエクスポートしようとしていますが、" & vbCrLf _
-                                   & "エクスポート先のファイルが他ユーザによって変更されています。" & vbCrLf _
-                                   & "このままエクスポートしてもよろしいですか？" & vbCrLf _
-                                   & vbCrLf _
-                                   & "コンポーネント名：" & com.Name & vbCrLf _
-                                   & "エクスポート先：" & expath
-                        If MsgBox(confirmmsg, vbYesNo) = vbYes Then export = True
+                        confirmmsg = formatString(getMsg(CONFIRM_EXPORT), com.Name, expath)
+                        If popupMsg(confirmmsg, vbYesNo) = vbYes Then export = True
                     End If
                     If export Then
                         com.export expath
@@ -503,8 +492,8 @@ Private Sub updateModifiedRecursive(ByVal dirpath As String)
 FAILED_RECURSIVE:
     Err.Raise Err.Number, Err.Source, Err.Description
 CATCH_ERR:
-    If Not d Is Nothing Then errmsg = "フォルダ：" & d.Path & vbCrLf
-    If Not f Is Nothing Then errmsg = "ファイル：" & f.Path & vbCrLf
+    If Not d Is Nothing Then errmsg = formatString(getMsg(INFO_FOLDER), d.Path)
+    If Not f Is Nothing Then errmsg = formatString(getMsg(INFO_FILE), f.Path)
     Err.Raise Err.Number, "updateModifiedRecursive > " & Err.Source, errmsg & Err.Description
 End Sub
 
@@ -744,21 +733,25 @@ End Function
 ' Notification
 
 Private Sub popupFinish(Optional ByVal msg As String)
-    If msg = "" Then msg = "VBAPorterは実行を完了しました"
-    MsgBox msg
+    If msg = "" Then msg = getMsg(FINISHED)
+    popupMsg msg
 End Sub
 
 Private Sub popupError(ByVal errno As Long, _
                        ByVal errsrc As String, _
                        ByVal errdesc As String, _
                        Optional ByVal errmsg As String)
-    If errmsg = "" Then errmsg = "VBAPorterは実行に失敗しました。"
-    MsgBox errmsg & vbCrLf _
-           & vbCrLf _
-           & "ErrNumber: " & errno & vbCrLf _
-           & "ErrSource: " & errsrc & vbCrLf _
-           & errdesc
+    If errmsg = "" Then errmsg = getMsg(FAILED)
+    popupMsg errmsg & vbCrLf _
+             & vbCrLf _
+             & "ErrNumber: " & errno & vbCrLf _
+             & "ErrSource: " & errsrc & vbCrLf _
+             & errdesc
 End Sub
+
+Private Function popupMsg(ByVal msg As String, Optional ByVal style As VbMsgBoxStyle = vbOKOnly) As VbMsgBoxResult
+    popupMsg = MsgBox(msg, style, "VBAPorter")
+End Function
 
 Private Function formatString(ByVal s As String, ParamArray args() As Variant) As String
     Dim i As Integer
@@ -769,7 +762,7 @@ Private Function formatString(ByVal s As String, ParamArray args() As Variant) A
     For i = 0 To UBound(args)
         idx = InStr(s, "%s")
         If idx <= 0 Then Exit For
-        s = Left(s, idx) & args(i) & Mid(s, idx + 2)
+        s = Left(s, idx - 1) & args(i) & Mid(s, idx + 2)
     Next
     formatString = s
     Exit Function
@@ -778,14 +771,30 @@ CATCH_ERR:
     Err.Raise Err.Number, "formatString > " & Err.Source, Err.Description
 End Function
 
-Private Function getLanguage() As LANG
+Private Function getMsg(ByVal msgtype As msg) As String
+    Dim key As String
+    Dim mgr As Object
+
+    On Error GoTo CATCH_ERR
+    
+    key = getMsgKey(msgtype, getLanguage)
+    Set mgr = getMsgManager
+    If Not mgr.Exists(key) Then Exit Function
+    getMsg = mgr.Item(key)
+    Exit Function
+
+CATCH_ERR:
+    Err.Raise Err.Number, "getMsg > " & Err.Source, Err.Description
+End Function
+
+Private Function getLanguage() As lang
     On Error GoTo CATCH_ERR
     
     Select Case Application.International(xlCountryCode)
         Case 81
-            getLanguage = LANG.Japanese
+            getLanguage = lang.Japanese
         Case Else
-            getLanguage = LANG.English
+            getLanguage = lang.English
     End Select
     Exit Function
 
@@ -801,92 +810,92 @@ Private Function getMsgManager() As Object
     If ret Is Nothing Then
         Set ret = CreateObject("Scripting.Dictionary")
         
-        ret.Add getMsgKey(MSG.FINISHED, LANG.English), _
-                "VBAPorter finished execute."
-        ret.Add getMsgKey(MSG.FINISHED, LANG.Japanese), _
-                "VBAPorterは実行を完了しました。"
+        ret.Add getMsgKey(msg.FINISHED, lang.English), _
+                "Finished execute."
+        ret.Add getMsgKey(msg.FINISHED, lang.Japanese), _
+                "実行が完了しました。"
         
-        ret.Add getMsgKey(MSG.FAILED, LANG.English), _
-                "VBAPorter failed to execute."
-        ret.Add getMsgKey(MSG.FAILED, LANG.Japanese), _
-                "VBAPorterは実行に失敗しました。"
+        ret.Add getMsgKey(msg.FAILED, lang.English), _
+                "Failed to execute."
+        ret.Add getMsgKey(msg.FAILED, lang.Japanese), _
+                "実行に失敗しました。"
         
-        ret.Add getMsgKey(MSG.FAILED_MENU, LANG.English), _
+        ret.Add getMsgKey(msg.FAILED_MENU, lang.English), _
                 "Failed to create menu."
-        ret.Add getMsgKey(MSG.FAILED_MENU, LANG.Japanese), _
+        ret.Add getMsgKey(msg.FAILED_MENU, lang.Japanese), _
                 "メニュー生成に失敗しました。"
         
-        ret.Add getMsgKey(MSG.FAILED_IMPORT, LANG.English), _
+        ret.Add getMsgKey(msg.FAILED_IMPORT, lang.English), _
                 "Failed to import component."
-        ret.Add getMsgKey(MSG.FAILED_IMPORT, LANG.Japanese), _
+        ret.Add getMsgKey(msg.FAILED_IMPORT, lang.Japanese), _
                 "コンポーネントのインポートに失敗しました。"
         
-        ret.Add getMsgKey(MSG.FAILED_REMOVE, LANG.English), _
+        ret.Add getMsgKey(msg.FAILED_REMOVE, lang.English), _
                 "Failed to remove component."
-        ret.Add getMsgKey(MSG.FAILED_REMOVE, LANG.Japanese), _
+        ret.Add getMsgKey(msg.FAILED_REMOVE, lang.Japanese), _
                 "既存コンポーネントの削除に失敗しました。"
         
-        ret.Add getMsgKey(MSG.MENU_MANAGE, LANG.English), _
+        ret.Add getMsgKey(msg.MENU_MANAGE, lang.English), _
                 "Management"
-        ret.Add getMsgKey(MSG.MENU_MANAGE, LANG.Japanese), _
+        ret.Add getMsgKey(msg.MENU_MANAGE, lang.Japanese), _
                 "管理"
 
-        ret.Add getMsgKey(MSG.MENU_SAVE, LANG.English), _
+        ret.Add getMsgKey(msg.MENU_SAVE, lang.English), _
                 "Save"
-        ret.Add getMsgKey(MSG.MENU_SAVE, LANG.Japanese), _
+        ret.Add getMsgKey(msg.MENU_SAVE, lang.Japanese), _
                 "保存"
 
-        ret.Add getMsgKey(MSG.MENU_UPDATE, LANG.English), _
+        ret.Add getMsgKey(msg.MENU_UPDATE, lang.English), _
                 "Update"
-        ret.Add getMsgKey(MSG.MENU_UPDATE, LANG.Japanese), _
+        ret.Add getMsgKey(msg.MENU_UPDATE, lang.Japanese), _
                 "更新"
         
-        ret.Add getMsgKey(MSG.CONFIRM_EXPORT, LANG.English), _
+        ret.Add getMsgKey(msg.CONFIRM_EXPORT, lang.English), _
                 "The file as a export path of the following component was updated by other user." & vbCrLf _
-                & "Do you export the component?" & vbCrLf _
+                & "Do you continue to export the component?" & vbCrLf _
                 & vbCrLf _
                 & "Component: %s" & vbCrLf _
                 & "ExportPath: %s"
-        ret.Add getMsgKey(MSG.CONFIRM_EXPORT, LANG.Japanese), _
+        ret.Add getMsgKey(msg.CONFIRM_EXPORT, lang.Japanese), _
                 "以下のコンポーネントはエクスポート先のファイルが他ユーザによって変更されています。" & vbCrLf _
                 & "このままエクスポートしてもよろしいですか？" & vbCrLf _
                 & vbCrLf _
                 & "コンポーネント名： %s" & vbCrLf _
                 & "エクスポート先： %s"
         
-        ret.Add getMsgKey(MSG.NONE_EXPORTPATH, LANG.English), _
+        ret.Add getMsgKey(msg.NONE_EXPORTPATH, lang.English), _
                 "The following component will be not exported because the export path is not set." & vbCrLf _
                 & vbCrLf _
                 & "Component: %s"
-        ret.Add getMsgKey(MSG.NONE_EXPORTPATH, LANG.Japanese), _
+        ret.Add getMsgKey(msg.NONE_EXPORTPATH, lang.Japanese), _
                 "以下のコンポーネントはエクスポート先が設定されていないためエクスポートされません。" & vbCrLf _
                 & vbCrLf _
                 & "コンポーネント名： %s"
         
-        ret.Add getMsgKey(MSG.NONE_CONFIG, LANG.English), _
+        ret.Add getMsgKey(msg.NONE_CONFIG, lang.English), _
                 "The config file is not found in ""%s""."
-        ret.Add getMsgKey(MSG.NONE_CONFIG, LANG.Japanese), _
+        ret.Add getMsgKey(msg.NONE_CONFIG, lang.Japanese), _
                 """%s""に設定ファイルが見つかりません。"
         
-        ret.Add getMsgKey(MSG.NONE_ROOTPATH, LANG.English), _
-                "以下のフォルダが見つからないため、" & vbCrLf _
-                & "%sのコンポーネントのインポート及びメニュー生成は実行されません。" & vbCrLf _
+        ret.Add getMsgKey(msg.NONE_ROOTPATH, lang.English), _
+                "Importing component and creating menu will be not executed for %s." & vbCrLf _
+                & "Because the following directory is not found." & vbCrLf _
                 & vbCrLf _
-                & "フォルダ： %s"
-        ret.Add getMsgKey(MSG.NONE_ROOTPATH, LANG.Japanese), _
+                & "Directory: %s"
+        ret.Add getMsgKey(msg.NONE_ROOTPATH, lang.Japanese), _
                 "以下のフォルダが見つからないため、" & vbCrLf _
                 & "%sのコンポーネントのインポート及びメニュー生成は実行されません。" & vbCrLf _
                 & vbCrLf _
                 & "フォルダ： %s"
         
-        ret.Add getMsgKey(MSG.INFO_FOLDER, LANG.English), _
-                "Folder: %s" & vbCrLf
-        ret.Add getMsgKey(MSG.INFO_FOLDER, LANG.Japanese), _
+        ret.Add getMsgKey(msg.INFO_FOLDER, lang.English), _
+                "Directory: %s" & vbCrLf
+        ret.Add getMsgKey(msg.INFO_FOLDER, lang.Japanese), _
                 "フォルダ： %s" & vbCrLf
         
-        ret.Add getMsgKey(MSG.INFO_FILE, LANG.English), _
+        ret.Add getMsgKey(msg.INFO_FILE, lang.English), _
                 "File: %s" & vbCrLf
-        ret.Add getMsgKey(MSG.INFO_FILE, LANG.Japanese), _
+        ret.Add getMsgKey(msg.INFO_FILE, lang.Japanese), _
                 "ファイル： %s" & vbCrLf
         
     End If
@@ -897,7 +906,7 @@ CATCH_ERR:
     Err.Raise Err.Number, "getMsgManager > " & Err.Source, Err.Description
 End Function
 
-Private Function getMsgKey(ByVal msgtype As MSG, ByVal lang As LANG) As String
+Private Function getMsgKey(ByVal msgtype As msg, ByVal lang As lang) As String
     getMsgKey = msgtype & ":" & lang
 End Function
 
