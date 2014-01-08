@@ -1,5 +1,5 @@
 Attribute VB_Name = "menuTest1"
-'VBAPorter:ExportPath=X:\MyWork\vba-porter\sample\menuTest1.bas
+'VBAPorter:ExportPath=X:\MyWork\vba-porter\sample\ja\menuTest1.bas
 'VBAPorter:MenuName=ƒƒjƒ…[ ‚»‚Ì‚P
 
 Option Explicit
