@@ -113,7 +113,7 @@ But, if you add module on Visual Basic Editor, you need to define the above comm
 
 This addin can manage the component that is put in multiple location.  
 But, They is imported into the VBA project of vba-porter.xla.  
-The VBA project has not namespace. The constitution of The project is flat.  
+The VBA project has not namespace. The constitution of the project is flat.  
 So, you need to fulfill that the name of component is unique in the imported component.  
 
 Also, The program of vba-porter is defined in 'main.bas'.  
