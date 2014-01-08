@@ -4,7 +4,8 @@ What's this?
 ============
 
 This is a addin of Excel.  
-This addin provides the menu which import/export/run your VBA component on Excel.
+This addin provides the menu which import/export/run your VBA component,
+ (Standard/Class/Form module), on Visual Basic Editor.
 
 
 Feature
@@ -15,6 +16,10 @@ Feature
 You can run importing/exporting your VBA source files from the following menu.
 
 ![defaultmenu](img/defaultmenu.png)
+
+\* For import, press 'Update'.  
+\* For export, press 'Save'.  
+\* When import, remove all component of the project of vba-porter.xla before import.  
 
 ### Provide menu for running your procedure
 
@@ -27,8 +32,8 @@ The menu is created from the information of your component.
 
 You need to fulfill the following condition for creating your menu.
 
-* Define the public procedure which is named 'Click'
-* Write the menu name in the leading comment of the file
+* Define the public procedure which is named 'Click'. (The procedure is called when press the menu)
+* Write the menu name in the leading comment of the file.
 
 ```vb
 'VBAPorter:MenuName=MyMenu 01
@@ -41,9 +46,10 @@ End Sub
 
 ### Check modification of the your component export path
 
-When you are developing VBA on Visual Basic Editor,  
+When you are developing VBA on Visual Basic Editor after import,  
 it may happen that other program, (ex. SVN), changes the file which is a export path of the developed VBA.  
-In the case, the following dialog is shown and you can continue/quit exporting the component.
+In the case, the following dialog is shown when export.  
+So, you can continue/quit exporting the component.
 
 ![confirmexport](img/confirmexport.png)
 
@@ -53,7 +59,7 @@ Install
 
 1. Download vba-porter.xla
 
-2. Select Tool - AddIn on the menu bar of Excel
+2. Select 'Tool - AddIn' on the menu bar of Excel
 
 3. Press 'Reference' on the following dialog
 
