@@ -25,8 +25,8 @@ Private Enum msg
     FAILED_IMPORT = 13
     FAILED_REMOVE = 14
     MENU_MANAGE = 21
-    MENU_SAVE = 22
-    MENU_UPDATE = 23
+    MENU_EXPORT = 22
+    MENU_IMPORT = 23
     CONFIRM_EXPORT = 31
     NONE_EXPORTPATH = 41
     NONE_CONFIG = 42
@@ -169,10 +169,10 @@ Private Function createMenu() As CommandBarPopup
     Set childmenu = rootmenu.Controls.Add(Type:=MsoControlType.msoControlPopup)
     childmenu.Caption = getMsg(MENU_MANAGE)
     Set menubtn = childmenu.Controls.Add(Type:=MsoControlType.msoControlButton)
-    menubtn.Caption = getMsg(MENU_SAVE)
+    menubtn.Caption = getMsg(MENU_EXPORT)
     menubtn.OnAction = "main.save"
     Set menubtn = childmenu.Controls.Add(Type:=MsoControlType.msoControlButton)
-    menubtn.Caption = getMsg(MENU_UPDATE)
+    menubtn.Caption = getMsg(MENU_IMPORT)
     menubtn.OnAction = "main.update"
 
     Set createMenu = rootmenu
@@ -840,15 +840,15 @@ Private Function getMsgManager() As Object
         ret.Add getMsgKey(msg.MENU_MANAGE, lang.Japanese), _
                 "管理"
 
-        ret.Add getMsgKey(msg.MENU_SAVE, lang.English), _
-                "Save"
-        ret.Add getMsgKey(msg.MENU_SAVE, lang.Japanese), _
-                "保存"
+        ret.Add getMsgKey(msg.MENU_EXPORT, lang.English), _
+                "Export"
+        ret.Add getMsgKey(msg.MENU_EXPORT, lang.Japanese), _
+                "エクスポート"
 
-        ret.Add getMsgKey(msg.MENU_UPDATE, lang.English), _
-                "Update"
-        ret.Add getMsgKey(msg.MENU_UPDATE, lang.Japanese), _
-                "更新"
+        ret.Add getMsgKey(msg.MENU_IMPORT, lang.English), _
+                "Import"
+        ret.Add getMsgKey(msg.MENU_IMPORT, lang.Japanese), _
+                "インポート"
         
         ret.Add getMsgKey(msg.CONFIRM_EXPORT, lang.English), _
                 "The file as a export path of the following component was updated by other user." & vbCrLf _

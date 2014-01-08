@@ -5,7 +5,12 @@ What's this?
 
 This is a addin of Excel.  
 This addin provides the menu which import/export/run your VBA component,
- (Standard/Class/Form module), on Visual Basic Editor.
+ (Standard/Class/Form module), on Visual Basic Editor.  
+
+You can do the following by this addin.
+
+* Doing the version management, (ex. SVN), for VBA
+* Coding VBA on the editor other than Visual Basic Editor
 
 
 Feature
@@ -17,32 +22,12 @@ You can run importing/exporting your VBA source files from the following menu.
 
 ![defaultmenu](img/defaultmenu.png)
 
-\* For import, press 'Update'.  
-\* For export, press 'Save'.  
-\* When import, remove all component of the project of vba-porter.xla before import.  
-
 ### Provide menu for running your procedure
 
 You can run your component procedure from the menu like the following.  
 The menu is created from the information of your component.
 
 ![yourmenu](img/yourmenu.png)
-
-#### Requirement for the menu of your component
-
-You need to fulfill the following condition for creating your menu.
-
-* Define the public procedure which is named 'Click'. (The procedure is called when press the menu)
-* Write the menu name in the leading comment of the file.
-
-```vb
-'VBAPorter:MenuName=MyMenu 01
-Public Sub Click()
-End Sub
-```
-
-\* For detail, see 'sample' directory.  
-\* The menu is created from only standard module which has the extension, 'bas'.
 
 ### Check modification of the your component export path
 
@@ -73,7 +58,7 @@ Install
 
     ![install3](img/install3.png)
 
-6. Check 'VBAPorter' is appeared on the menu bar of Excel like the following
+6. Check 'VBAPorter' appeare on the menu bar of Excel like the following
 
     ![install4](img/install4.png)
 
@@ -101,6 +86,54 @@ MENUNAME=SampleProject
 ```
 
 \* For sample, see 'conf' directory.  
+
+
+Consideration
+=============
+
+### Import
+
+When import, remove all component of the project of vba-porter.xla before import.  
+If you add/change module on Visual Basic Editor, you need to export them before import.
+
+### Export
+
+For export, you need to define the export path in the leading comment of the component.  
+
+```vb
+'VBAPorter:ExportPath=C:\Path\To\Export
+```
+
+\* For sample, see 'sample' directory.  
+
+The above comment is created/updated automatically when import.  
+But, if you add module on Visual Basic Editor, you need to define the above comment manually.
+
+### Name of component
+
+This addin can manage the component that is put in multiple location.  
+But, They is imported into the VBA project of vba-porter.xla.  
+The VBA project has not namespace. The constitution of The project is flat.  
+So, you need to fulfill that the name of component is unique in the imported component.  
+
+Also, The program of vba-porter is defined in 'main.bas'.  
+So, you can not define 'main.bas'.
+
+### Requirement for the menu of your component
+
+You need to fulfill the following condition for creating your menu.
+
+* Define the public procedure which is named 'Click'. (The procedure is called when press the menu)
+* Define the menu name in the leading comment of the file.
+
+```vb
+'VBAPorter:MenuName=MyMenu 01
+Public Sub Click()
+End Sub
+```
+
+\* For sample, see 'sample' directory.  
+\* The menu is created from only standard module which has the extension, 'bas'.  
 
 
 Tested On
