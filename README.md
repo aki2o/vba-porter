@@ -4,7 +4,7 @@ What's this?
 ============
 
 This is a addin of Excel.  
-The addin provides the menu which import/export/run your VBA component on Excel.
+This addin provides the menu which import/export/run your VBA component on Excel.
 
 
 Feature
@@ -39,10 +39,10 @@ End Sub
 \* For detail, see 'sample' directory.  
 \* The menu is created from only standard module which has the extension, 'bas'.
 
-### Check modification of the file which is a export path of your component
+### Check modification of the your component export path
 
 When you are developing VBA on Visual Basic Editor,  
-it may happen that other program changes the file which is a export path of the developed VBA.  
+it may happen that other program, (ex. SVN), changes the file which is a export path of the developed VBA.  
 In the case, the following dialog is shown and you can continue/quit exporting the component.
 
 ![confirmexport](img/confirmexport.png)
@@ -57,19 +57,19 @@ Install
 
 3. Press 'Reference' on the following dialog
 
-![install1](img/install1.png)
+    ![install1](img/install1.png)
 
 4. Select the downloaded vba-porter.xla on the following dialog
 
-![install2](img/install2.png)
+    ![install2](img/install2.png)
 
 5. Press 'OK' with selecting 'Vba-Porter' on the following dialog
 
-![install3](img/install3.png)
+    ![install3](img/install3.png)
 
 6. Check 'VBAPorter' is appeared on the menu bar of Excel like the following
 
-![install4](img/install4.png)
+    ![install4](img/install4.png)
 
 
 Configuration
@@ -82,16 +82,16 @@ Write section in the file for each of the directory, which has your component, l
 
 ```ini
 [MyProj]
-' Section is any string which is required to be unique.
+; Section is any string which is required to be unique.
 
 ROOT=D:\Work\SampleProj\src
-' ROOT is a absolute path of the root directory which has your component.
-' Your component is searched in the directory recursively.
+; ROOT is a absolute path of the root directory which has your component.
+; Your component is searched in the directory recursively.
 
 MENUNAME=SampleProject
-' MENUNAME is a root menu name of the built menu from your component in ROOT.
-' If you don't want to create menu, don't set this key.
-' The child menu name is named from the directory name which has the component.
+; MENUNAME is a root menu name of the built menu from your component in ROOT.
+; If you don't want to create menu, don't set this key.
+; The child menu name is named from the directory name which has the component.
 ```
 
 \* For sample, see 'conf' directory.  
