@@ -91,6 +91,22 @@ MENUNAME=SampleProject
 Consideration
 =============
 
+### Security of macro
+
+The error like the following dialog may be shown by execute of import/export.  
+
+![securityerr](img/securityerr.png)
+
+In this case, check configuration of the dialog that is shown by selecting 'Tool - Macro - Security' on the menu bar of Excel.  
+
+* Level of security is less than middle.
+
+    ![security1](img/security1.png)
+
+* The following item is ticked.
+
+    ![security2](img/security2.png)
+
 ### Import
 
 When import, remove all component of the project of vba-porter.xla before import.  
